@@ -101,29 +101,6 @@ class SpecificationGenerator:
                     }
                     row_index += 1
 
-            # Обрабатываем остаток, если есть
-            # if remainder > 0:
-
-
-                # start_idx = full_chunks * size5
-                # chunk = pack_rows.iloc[start_idx:]
-
-                # print(f"Обработка остатка: строки {start_idx + 1}-{total_rows}")
-
-                # for _, pack_row in chunk.iterrows():
-                #     self.output_df.loc[row_index] = {
-                #         'productNameRus': pack_row['productNameRus'],
-                #         'productNameEng': pack_row['productNameEng'],
-                #         'identificationCode': pack_row['identificationCode'],
-                #         'identificationCodeOuter': identification_outer,
-                #         'identificationCodeCase': None,
-                #         'identificationCodePallet': None,
-                #         'invoiceNo': None,
-                #         'invoiceDate': None,
-                #         'TotalAmount': None
-                #     }
-                #     row_index += 1
-
             print(f"Обработано строк для GTIN Outer {current_gtin}: {row_index}")
 
         return row_index
