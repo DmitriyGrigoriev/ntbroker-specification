@@ -54,9 +54,6 @@ class SpecificationGenerator:
         for _, master_row in master_file.iterrows():
             current_gtin = master_row['GTIN Outer']
             print(f"\nОбработка GTIN Outer: {current_gtin}")
-            # Получаем identificationCodeOuter для текущего GTIN Outer
-            outer_rows = fort_qr[fort_qr['GTIN'] == master_row['GTIN Outer']]
-            identification_outer = outer_rows['identificationCode'].iloc[0] if not outer_rows.empty else None
 
             # Находим все строки с соответствующим GTIN
             pack_rows = fort_qr[fort_qr['GTIN'] == master_row['GTIN']]
@@ -86,6 +83,9 @@ class SpecificationGenerator:
                 chunk = pack_rows.iloc[start_idx:end_idx]
 
                 # print(f"Обработка порции {chunk_num + 1}/{full_chunks}: строки {start_idx + 1}-{end_idx}")
+                # Получаем identificationCodeOuter для текущего GTIN Outer
+                outer_rows = fort_qr[fort_qr['GTIN'] == master_row['GTIN Outer']]
+                identification_outer = outer_rows['identificationCode'].iloc[chunk_num] if not outer_rows.empty else None
 
                 for _, pack_row in chunk.iterrows():
                     self.output_df.loc[row_index] = {
