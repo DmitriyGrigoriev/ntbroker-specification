@@ -33,9 +33,10 @@ class SpecificationGenerator:
         # Для FORT_QR: заголовки в 7-й строке (индекс 6), данные с 11-й (индекс 10)
         fort_qr = pd.read_excel(self.fort_qr_path, sheet_name=0, header=6, skiprows=range(7, 10))
 
-        # Преобразуем GTIN и GTIN Outer в строки, если они не пустые
+        # Преобразуем GTIN, GTIN Outer, GTIN Case в строки, если они не пустые
         master_file['GTIN'] = master_file['GTIN'].apply(lambda x: str(int(x)) if pd.notna(x) else x)
         master_file['GTIN Outer'] = master_file['GTIN Outer'].apply(lambda x: str(int(x)) if pd.notna(x) else x)
+        master_file['GTIN Case'] = master_file['GTIN Case'].apply(lambda x: str(int(x)) if pd.notna(x) else x)
         fort_qr['GTIN'] = fort_qr['GTIN'].apply(lambda x: str(int(x)) if pd.notna(x) else x)
 
         return master_file, fort_qr
@@ -43,17 +44,21 @@ class SpecificationGenerator:
     def process_data(self, master_file, fort_qr):
         # 1. Находим все GTIN Outer из мастер файла в FORT_QR
         outer_matches = fort_qr[fort_qr['GTIN'].isin(master_file['GTIN Outer'])]
+        case_matches = fort_qr[fort_qr['GTIN'].isin(master_file['GTIN Case'])]
 
         # 2. Считаем количество совпадений
         outer_count = len(outer_matches)
+        case_count = len(case_matches)
         print(f"Найдено совпадений GTIN Outer: {outer_count}")
+        print(f"Найдено совпадений GTIN Case: {case_count}")
 
         # 3. Итерация по мастер файлу
         row_index = 0
 
         for _, master_row in master_file.iterrows():
-            current_gtin = master_row['GTIN Outer']
-            print(f"\nОбработка GTIN Outer: {current_gtin}")
+            current_gtin_outer = master_row['GTIN Outer']
+            current_gtin_case = master_row['GTIN Case']
+            print(f"\nОбработка GTIN Outer: {current_gtin_outer}, GTIN Case: {current_gtin_case}")
 
             # Находим все строки с соответствующим GTIN
             pack_rows = fort_qr[fort_qr['GTIN'] == master_row['GTIN']]
@@ -71,9 +76,25 @@ class SpecificationGenerator:
             )
             # Проверяем наличие остатка
             if remainder > 0:
-                error_msg = (f"Ошибка распределения для GTIN Outer {current_gtin}: "
+                error_msg = (f"Ошибка распределения для GTIN Outer {current_gtin_case}: "
                              f"{total_rows} пачек не могут быть равномерно распределены "
                              f"в коробки по {size5} пачек. Остаток: {remainder} пачек.")
+                raise ValueError(error_msg)
+
+            # Находим все строки с соответствующим GTIN Case
+            case_rows = fort_qr[fort_qr['GTIN'] == current_gtin_case]
+            # Ограничиваем количество мастер-кейсов согласно SIZE2
+            size2 = int(master_row['SIZE2']) if pd.notna(master_row['SIZE2']) else float('inf')
+            total_cases = len(case_rows)
+
+            print(
+                f"Всего мастер-кейсов: {total_cases}, размер паллета (SIZE2): {size2}"
+            )
+            # Проверяем, что количество мастер-кейсов соответствует SIZE2
+            if total_rows % size2 != 0:
+                error_msg = (f"Ошибка распределения для GTIN Case {current_gtin_case}: "
+                             f"{total_cases} мастер-кейсов не могут быть равномерно распределены "
+                             f"по {size2} на паллет. Остаток: {total_rows % size2} кейсов.")
                 raise ValueError(error_msg)
 
             # Обрабатываем полные порции
@@ -82,10 +103,14 @@ class SpecificationGenerator:
                 end_idx = (chunk_num + 1) * size5
                 chunk = pack_rows.iloc[start_idx:end_idx]
 
-                # print(f"Обработка порции {chunk_num + 1}/{full_chunks}: строки {start_idx + 1}-{end_idx}")
                 # Получаем identificationCodeOuter для текущего GTIN Outer
                 outer_rows = fort_qr[fort_qr['GTIN'] == master_row['GTIN Outer']]
                 identification_outer = outer_rows['identificationCode'].iloc[chunk_num] if not outer_rows.empty else None
+
+                # Получаем identificationCodeCase для текущего GTIN Case
+                # Вычисляем, к какому мастер-кейсу относится текущая коробка
+                case_index = int(chunk_num // (size2 / size5))  # предполагаем, что SIZE2 определяет кейсы на паллет
+                identification_case = case_rows['identificationCode'].iloc[case_index] if case_index < len(case_rows) else None
 
                 for _, pack_row in chunk.iterrows():
                     self.output_df.loc[row_index] = {
@@ -93,7 +118,7 @@ class SpecificationGenerator:
                         'productNameEng': pack_row['productNameEng'],
                         'identificationCode': pack_row['identificationCode'],
                         'identificationCodeOuter': identification_outer,
-                        'identificationCodeCase': None,
+                        'identificationCodeCase': identification_case,
                         'identificationCodePallet': None,
                         'invoiceNo': None,
                         'invoiceDate': None,
@@ -101,7 +126,7 @@ class SpecificationGenerator:
                     }
                     row_index += 1
 
-            print(f"Обработано строк для GTIN Outer {current_gtin}: {row_index}")
+            print(f"Обработано строк для GTIN Outer {current_gtin_outer}: {row_index}")
 
         return row_index
 
@@ -151,7 +176,7 @@ class SpecificationGenerator:
             self.save_to_excel(row_index)
         except ValueError as e:
             print(f"\nОшибка: {e}")
-            print("Процесс остановлен из-за несоответствия количества пачек и коробок.")
+            print("Процесс остановлен из-за несоответствия количества пачек, коробок или кейсов.")
             raise
 
 
@@ -159,7 +184,7 @@ class SpecificationGenerator:
 if __name__ == "__main__":
     generator = SpecificationGenerator(
         master_file_path="Мастер файл номенклатуры.xlsx",
-        fort_qr_path="FORT_QR_20250326145347.xlsx",
+        fort_qr_path="Коды_маркировки_620_02122024.xlsx",
         template_path="Invoice Specification template.xlsx"
     )
     generator.run()
