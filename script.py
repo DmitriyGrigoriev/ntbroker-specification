@@ -325,8 +325,23 @@ class SpecificationGenerator:
     def _write_data_to_excel(self) -> None:
         """Запись данных в Excel файл."""
         wb = load_workbook(self.new_filename)
-        _ = wb['Invoice specification']
+        ws = wb['Invoice specification']
 
+        # Записываем новые данные, начиная с 11-й строки (индекс 10 в Python)
+        for index, row in self.output_df.iterrows():
+            excel_row = 11 + index
+            ws.cell(row=excel_row, column=1, value=row['productNameRus'])
+            ws.cell(row=excel_row, column=2, value=row['productNameEng'])
+            ws.cell(row=excel_row, column=3, value=row['identificationCode'])
+            ws.cell(row=excel_row, column=4, value=row['identificationCodeOuter'])
+            ws.cell(row=excel_row, column=5, value=row['identificationCodeCase'])
+            ws.cell(row=excel_row, column=6, value=row['identificationCodePallet'] if 'identificationCodePallet' in row else None)
+            ws.cell(row=excel_row, column=7, value=row['invoiceNo'] if 'invoiceNo' in row else None)
+            ws.cell(row=excel_row, column=8, value=row['invoiceDate'] if 'invoiceDate' in row else None)
+            ws.cell(row=excel_row, column=9, value=row['TotalAmount'] if 'TotalAmount' in row else None)
+
+        # Сохраняем изменения в новый файл
+        wb.save(self.new_filename)
         # Запись данных начиная с заданной строки
         wb.close()
 
@@ -361,7 +376,7 @@ if __name__ == "__main__":
     # Использование функции
     result_file = generate_specification(
         master_file_path="Мастер файл номенклатуры.xlsx",
-        fort_qr_path="Коды_маркировки_620_02122024.xlsx",
+        fort_qr_path="Коды маркировки № 687 от 01.09.2025.xlsx",
         template_path="Invoice Specification template.xlsx"
     )
 
