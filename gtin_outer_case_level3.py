@@ -15,6 +15,7 @@ class SpecificationGenerator:
     Основные функции:
     - Сопоставление кодов GTIN между мастер-файлом и файлом QR-кодов
     - Группировка товаров по иерархии: пачка → коробка → мастер-кейс → паллет
+    - dentificationCode → identificationCodeOuter → identificationCodeCase
     - Валидация корректности распределения товаров по упаковкам
     - Формирование итоговой спецификации с кодами идентификации
     """
@@ -227,7 +228,7 @@ class SpecificationGenerator:
             chunk = self._get_chunk(pack_rows, chunk_num, size5)
 
             # Получение кодов идентификации
-            identification_outer = self._get_identification_code(
+            identification_outer = self._get_outer_identification_code(
                 fort_qr_outer, master_row['GTIN Outer'], chunk_num
             )
             identification_case = self._get_case_identification_code(
@@ -257,15 +258,19 @@ class SpecificationGenerator:
         end_idx = (chunk_num + 1) * size5
         return pack_rows.iloc[start_idx:end_idx]
 
-    def _get_identification_code(
+    def _get_outer_identification_code(
             self,
             fort_qr: pd.DataFrame,
             gtin: str,
             index: int
     ) -> str:
         """Получение кода идентификации по GTIN и индексу."""
-        rows = fort_qr[fort_qr['GTIN'] == gtin]
-        return rows['identificationCode'].iloc[index] if index < len(rows) else None
+        rows = fort_qr[fort_qr['GTIN'] == int(gtin)]
+        if len(rows) == 0:
+            raise ValueError(f"Не найдены строки с GTIN Outer: {gtin}")
+        if index >= len(rows):
+            raise ValueError(f"Индекс {index} превышает количество найденных строк ({len(rows)}) для GTIN Outer: {gtin}")
+        return rows['identificationCode'].iloc[index]
 
     def _get_case_identification_code(
             self,
@@ -275,8 +280,12 @@ class SpecificationGenerator:
             size2: int
     ) -> str:
         """Получение кода идентификации мастер-кейса."""
+        if len(case_rows) == 0:
+            raise ValueError(f"Не найдены строки для мастер-кейса")
         case_index = int(chunk_num // (size2 / size5))
-        return case_rows['identificationCode'].iloc[case_index] if case_index < len(case_rows) else None
+        if case_index >= len(case_rows):
+            raise ValueError(f"Индекс мастер-кейса {case_index} превышает количество найденных строк ({len(case_rows)})")
+        return case_rows['identificationCode'].iloc[case_index]
 
     def _add_chunk_to_output(
             self,
