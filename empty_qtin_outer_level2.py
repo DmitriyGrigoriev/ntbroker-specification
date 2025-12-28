@@ -94,21 +94,25 @@ class SpecificationGenerator:
                                  f"в коробки по {size} пачек. Остаток: {remainder} пачек.")
                     raise ValueError(error_msg)
             else:
-                size = int(master_row['SIZE2']) if pd.notna(master_row['SIZE2']) else float('inf')
                 total_rows = len(pack_rows)
-                full_chunks = total_rows // size
-                remainder = total_rows % size
+                if total_rows > 0:
+                    size = int(master_row['SIZE2']) if pd.notna(master_row['SIZE2']) else float('inf')
+                    full_chunks = total_rows // size
+                    remainder = total_rows % size
 
-                print(
-                    f"Всего пачек: {total_rows}, размер коробки (SIZE2): {size}, "
-                    f"полных коробок: {full_chunks}, остаток пачек: {remainder}"
-                )
-                # Проверяем наличие остатка
-                if remainder > 0:
-                    error_msg = (f"Ошибка распределения для GTIN Outer {current_gtin_outer}: "
-                                 f"{total_rows} пачек не могут быть равномерно распределены "
-                                 f"в коробки по {size} пачек. Остаток: {remainder} пачек.")
-                    raise ValueError(error_msg)
+                    print(
+                        f"Всего пачек: {total_rows}, размер коробки (SIZE2): {size}, "
+                        f"полных коробок: {full_chunks}, остаток пачек: {remainder}"
+                    )
+                    # Проверяем наличие остатка
+                    if remainder > 0:
+                        error_msg = (f"Ошибка распределения для GTIN Outer {current_gtin_outer}: "
+                                     f"{total_rows} пачек не могут быть равномерно распределены "
+                                     f"в коробки по {size} пачек. Остаток: {remainder} пачек.")
+                        raise ValueError(error_msg)
+                else:
+                    full_chunks = 0
+
 
             # Обрабатываем полные порции
             for chunk_num in range(full_chunks):
