@@ -57,6 +57,29 @@ SMALL_FILE = BASE_DIR / "small box cherry pomegranate.txt"
 LP_TIN = "9726009063"
 
 
+def clean_code(code: str) -> str:
+    """
+    Очищает код маркировки от управляющих символов.
+
+    Удаляет невидимые управляющие ASCII символы (0x00-0x1F, 0x7F),
+    такие как GS (Group Separator 0x1D), null bytes, и другие.
+    Оставляет только печатные символы и обычные пробелы.
+
+    Args:
+        code: Код маркировки, возможно содержащий спецсимволы.
+
+    Returns:
+        Очищенный код без управляющих символов.
+
+    Examples:
+        >>> clean_code("0104...\\x1d8005...\\x1d933...")
+        '0104...8005...933...'
+    """
+    # Удаляем все управляющие символы ASCII (0x00-0x1F), кроме пробелов (0x20)
+    # И символ DEL (0x7F)
+    return ''.join(char for char in code if ord(char) >= 0x20 and ord(char) != 0x7F)
+
+
 def detect_file_format(path: Path) -> str:
     """
     Определяет формат файла по расширению.
@@ -105,7 +128,7 @@ def read_codes(path: Path, file_format: str = None) -> list[str]:
     if file_format == "txt":
         # Чтение TXT: каждая строка = один код
         with open(path, "r", encoding="utf-8") as f:
-            codes = [line.strip() for line in f if line.strip()]
+            codes = [clean_code(line.strip()) for line in f if line.strip()]
 
     elif file_format == "csv":
         # Чтение CSV: первый столбец = код маркировки
@@ -131,7 +154,7 @@ def read_codes(path: Path, file_format: str = None) -> list[str]:
 
             for row in reader:
                 if row and row[0].strip():
-                    codes.append(row[0].strip())
+                    codes.append(clean_code(row[0].strip()))
 
     return codes
 
