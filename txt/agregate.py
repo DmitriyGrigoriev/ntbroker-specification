@@ -50,8 +50,8 @@ from xml.dom import minidom
 from xml.sax.saxutils import escape
 
 BASE_DIR = Path(__file__).parent
-MIDDLE_FILE = BASE_DIR / "middle box cherry pomegranate.txt"
-SMALL_FILE = BASE_DIR / "small box cherry pomegranate.txt"
+MIDDLE_FILE = BASE_DIR / "Блок апельсиновая жвачка.txt"
+SMALL_FILE = BASE_DIR / "Киз апельсиновая жвачка.txt"
 
 # ИНН организации
 LP_TIN = "9726009063"
@@ -183,7 +183,7 @@ def create_aggregation_xml(middle_boxes, small_boxes, lp_tin):
         lp_tin: ИНН организации.
 
     Returns:
-        Корневой элемент XML-дерева.
+        Кортеж (корневой элемент XML-дерева, словарь плейсхолдер -> код КИЗ).
 
     Raises:
         ValueError: Если количество КИЗ не делится нацело на количество блоков.
@@ -208,6 +208,8 @@ def create_aggregation_xml(middle_boxes, small_boxes, lp_tin):
     ET.SubElement(id_info, "LP_info", LP_TIN=lp_tin)
 
     # Содержимое упаковок
+    # Используем плейсхолдеры вместо CDATA, чтобы ET не экранировал спецсимволы
+    cdata_map = {}
     index = 0
     for pack_code in middle_boxes:
         pack_content = ET.SubElement(document, "pack_content")
@@ -219,18 +221,21 @@ def create_aggregation_xml(middle_boxes, small_boxes, lp_tin):
             if index >= len(small_boxes):
                 break
             cis = ET.SubElement(pack_content, "cis")
-            cis.text = f"<![CDATA[{small_boxes[index]}]]>"
+            placeholder = f"__CDATA_{index}__"
+            cis.text = placeholder
+            cdata_map[placeholder] = small_boxes[index]
             index += 1
 
-    return root
+    return root, cdata_map
 
 
-def format_xml(root):
+def format_xml(root, cdata_map=None):
     """
     Форматирует XML-дерево в читаемый вид с отступами.
 
     Args:
         root: Корневой элемент XML-дерева.
+        cdata_map: Словарь плейсхолдер -> оригинальный код КИЗ для CDATA-секций.
 
     Returns:
         Отформатированный XML в виде байтов (UTF-8).
@@ -239,12 +244,13 @@ def format_xml(root):
     parsed = minidom.parseString(rough_string)
     pretty_xml = parsed.toprettyxml(indent="    ", encoding="utf-8")
 
-    # Исправление экранирования CDATA (ElementTree их экранирует)
-    pretty_xml = pretty_xml.replace(
-        b"&lt;![CDATA[", b"<![CDATA["
-    ).replace(
-        b"]]&gt;", b"]]>"
-    )
+    # Заменяем плейсхолдеры на CDATA-секции с оригинальными (неэкранированными) кодами
+    if cdata_map:
+        for placeholder, original_code in cdata_map.items():
+            pretty_xml = pretty_xml.replace(
+                placeholder.encode("utf-8"),
+                f"<![CDATA[{original_code}]]>".encode("utf-8"),
+            )
 
     return pretty_xml
 
@@ -346,8 +352,8 @@ def main():
 
     # Создание XML
     try:
-        root = create_aggregation_xml(middle_boxes, small_boxes, args.inn)
-        pretty_xml = format_xml(root)
+        root, cdata_map = create_aggregation_xml(middle_boxes, small_boxes, args.inn)
+        pretty_xml = format_xml(root, cdata_map)
 
         with open(output_path, "wb") as f:
             f.write(pretty_xml)
