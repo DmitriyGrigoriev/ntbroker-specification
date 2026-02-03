@@ -216,7 +216,7 @@ def create_aggregation_xml(middle_boxes, small_boxes, lp_tin):
         pc = ET.SubElement(pack_content, "pack_code")
         pack_placeholder = f"__CDATA_PACK_{pack_index}__"
         pc.text = pack_placeholder
-        cdata_map[pack_placeholder] = pack_code
+        cdata_map[pack_placeholder] = pack_code[:25]  # Первые 25 символов
 
         for _ in range(kis_per_block):
             if cis_index >= len(small_boxes):
@@ -224,7 +224,7 @@ def create_aggregation_xml(middle_boxes, small_boxes, lp_tin):
             cis = ET.SubElement(pack_content, "cis")
             cis_placeholder = f"__CDATA_CIS_{cis_index}__"
             cis.text = cis_placeholder
-            cdata_map[cis_placeholder] = small_boxes[cis_index]
+            cdata_map[cis_placeholder] = small_boxes[cis_index][:21]  # Первые 21 символ
             cis_index += 1
 
     return root, cdata_map
