@@ -358,7 +358,7 @@ def main():
         with open(output_path, "wb") as f:
             f.write(pretty_xml)
 
-        print(f"✓ XML успешно создан: {output_path}")
+        print(f"XML успешно создан: {output_path}")
         return 0
     except ValueError as e:
         print(f"Ошибка при создании XML: {e}")
