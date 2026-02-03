@@ -47,7 +47,6 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from xml.dom import minidom
-from xml.sax.saxutils import escape
 
 BASE_DIR = Path(__file__).parent
 MIDDLE_FILE = BASE_DIR / "Блок апельсиновая жвачка.txt"
@@ -210,21 +209,23 @@ def create_aggregation_xml(middle_boxes, small_boxes, lp_tin):
     # Содержимое упаковок
     # Используем плейсхолдеры вместо CDATA, чтобы ET не экранировал спецсимволы
     cdata_map = {}
-    index = 0
-    for pack_code in middle_boxes:
+    cis_index = 0
+    for pack_index, pack_code in enumerate(middle_boxes):
         pack_content = ET.SubElement(document, "pack_content")
 
         pc = ET.SubElement(pack_content, "pack_code")
-        pc.text = escape(pack_code)
+        pack_placeholder = f"__CDATA_PACK_{pack_index}__"
+        pc.text = pack_placeholder
+        cdata_map[pack_placeholder] = pack_code
 
         for _ in range(kis_per_block):
-            if index >= len(small_boxes):
+            if cis_index >= len(small_boxes):
                 break
             cis = ET.SubElement(pack_content, "cis")
-            placeholder = f"__CDATA_{index}__"
-            cis.text = placeholder
-            cdata_map[placeholder] = small_boxes[index]
-            index += 1
+            cis_placeholder = f"__CDATA_CIS_{cis_index}__"
+            cis.text = cis_placeholder
+            cdata_map[cis_placeholder] = small_boxes[cis_index]
+            cis_index += 1
 
     return root, cdata_map
 
