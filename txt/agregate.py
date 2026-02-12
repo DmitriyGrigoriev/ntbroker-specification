@@ -56,6 +56,10 @@ SMALL_FILE = BASE_DIR / "Киз апельсиновая жвачка.txt"
 # ИНН организации
 LP_TIN = "9726009063"
 
+# Символы, которые НЕ нужно экранировать в pack_code
+# Добавьте сюда символы, которые должны остаться без экранирования
+PACK_CODE_NO_ESCAPE_CHARS = {'>',}
+
 
 def clean_code(code: str) -> str:
     """
@@ -78,6 +82,53 @@ def clean_code(code: str) -> str:
     # Удаляем все управляющие символы ASCII (0x00-0x1F), кроме пробелов (0x20)
     # И символ DEL (0x7F)
     return ''.join(char for char in code if ord(char) >= 0x20 and ord(char) != 0x7F)
+
+
+def custom_escape(text: str, no_escape_chars: set[str] = None) -> str:
+    """
+    Экранирует XML спецсимволы, за исключением указанных в no_escape_chars.
+
+    По умолчанию xml.sax.saxutils.escape() экранирует:
+        < -> &lt;
+        > -> &gt;
+        & -> &amp;
+
+    Эта функция позволяет исключить определенные символы из экранирования.
+
+    Args:
+        text: Текст для экранирования.
+        no_escape_chars: Набор символов, которые НЕ нужно экранировать.
+                        Если None, экранируются все стандартные символы.
+
+    Returns:
+        Экранированный текст с учетом исключений.
+
+    Examples:
+        >>> custom_escape("<test>", no_escape_chars={'<', '>'})
+        '<test>'
+        >>> custom_escape("<test>&data", no_escape_chars={'<', '>'})
+        '<test>&amp;data'
+    """
+    if no_escape_chars is None:
+        no_escape_chars = set()
+
+    # Стандартные символы для экранирования в XML
+    escape_map = {
+        '<': '&lt;',
+        '>': '&gt;',
+        '&': '&amp;',
+        "'": '&apos;',
+        '"': '&quot;',
+    }
+
+    result = []
+    for char in text:
+        if char in escape_map and char not in no_escape_chars:
+            result.append(escape_map[char])
+        else:
+            result.append(char)
+
+    return ''.join(result)
 
 
 def detect_file_format(path: Path) -> str:
@@ -208,14 +259,17 @@ def create_aggregation_xml(middle_boxes, small_boxes, lp_tin):
     ET.SubElement(id_info, "LP_info", LP_TIN=lp_tin)
 
     # Содержимое упаковок
-    # Используем плейсхолдеры вместо CDATA, чтобы ET не экранировал спецсимволы
+    # Используем плейсхолдеры для pack_code и cis, чтобы ET не экранировал спецсимволы
     cdata_map = {}
     cis_index = 0
     for pack_index, pack_code in enumerate(middle_boxes):
         pack_content = ET.SubElement(document, "pack_content")
 
+        # Используем placeholder для pack_code
         pc = ET.SubElement(pack_content, "pack_code")
-        pc.text = escape(pack_code[:25]) # Первые 25 символов
+        pack_placeholder = f"__PACK_CODE_{pack_index}__"
+        pc.text = pack_placeholder
+        cdata_map[pack_placeholder] = pack_code[:25]  # Первые 25 символов
 
         for _ in range(kis_per_block):
             if cis_index >= len(small_boxes):
@@ -235,7 +289,9 @@ def format_xml(root, cdata_map=None):
 
     Args:
         root: Корневой элемент XML-дерева.
-        cdata_map: Словарь плейсхолдер -> оригинальный код КИЗ для CDATA-секций.
+        cdata_map: Словарь плейсхолдер -> оригинальный код.
+                  Для __PACK_CODE_* применяется custom_escape с PACK_CODE_NO_ESCAPE_CHARS.
+                  Для __CDATA_CIS_* используется CDATA-секция без экранирования.
 
     Returns:
         Отформатированный XML в виде байтов (UTF-8).
@@ -244,13 +300,22 @@ def format_xml(root, cdata_map=None):
     parsed = minidom.parseString(rough_string)
     pretty_xml = parsed.toprettyxml(indent="    ", encoding="utf-8")
 
-    # Заменяем плейсхолдеры на CDATA-секции с оригинальными (неэкранированными) кодами
+    # Заменяем плейсхолдеры на соответствующие значения
     if cdata_map:
         for placeholder, original_code in cdata_map.items():
-            pretty_xml = pretty_xml.replace(
-                placeholder.encode("utf-8"),
-                f"<![CDATA[{original_code}]]>".encode("utf-8"),
-            )
+            if placeholder.startswith("__PACK_CODE_"):
+                # Для pack_code применяем кастомное экранирование
+                escaped_code = custom_escape(original_code, PACK_CODE_NO_ESCAPE_CHARS)
+                pretty_xml = pretty_xml.replace(
+                    placeholder.encode("utf-8"),
+                    escaped_code.encode("utf-8"),
+                )
+            elif placeholder.startswith("__CDATA_CIS_"):
+                # Для cis используем CDATA-секцию (без экранирования)
+                pretty_xml = pretty_xml.replace(
+                    placeholder.encode("utf-8"),
+                    f"<![CDATA[{original_code}]]>".encode("utf-8"),
+                )
 
     return pretty_xml
 
@@ -367,4 +432,5 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())
